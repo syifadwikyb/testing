@@ -31,7 +31,6 @@
         
         // 1. IP VPS Anda. Wajib pakai port WebSocket (8888)
         const BROKER_URL = 'ws://145.79.15.182:8888';
-        const client = mqtt.connect(BROKER_URL);
         
         // 2. Topik ini harus SAMA PERSIS dengan topik yang dipakai Raspi nanti
         const TOPIC = `diptrack/tracking/bus/${BUS_ID}/location`;
