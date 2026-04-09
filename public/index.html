@@ -3,137 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bus Tracker (HP)</title>
+    <title>Simulator Raspi (HP)</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         body { font-family: sans-serif; text-align: center; padding: 20px; background: #eee; }
         .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        h1 { color: #333; margin-bottom: 5px; }
         .status { font-weight: bold; color: red; margin-bottom: 20px; }
-        button { padding: 15px 30px; font-size: 18px; border: none; border-radius: 50px; cursor: pointer; margin: 10px; width: 80%; }
+        button { padding: 15px 30px; font-size: 18px; border: none; border-radius: 50px; cursor: pointer; width: 80%; }
         #btnStart { background-color: #28a745; color: white; }
         #btnStop { background-color: #dc3545; color: white; display: none; }
-        .info { text-align: left; margin-top: 20px; font-family: monospace; font-size: 14px; background: #333; color: #0f0; padding: 10px; border-radius: 5px; }
+        textarea { width: 100%; font-size: 11px; margin-top: 10px; }
     </style>
 </head>
 <body>
-
     <div class="card">
-        <h1>🚌 Simulator Bus 1</h1>
-        <p>Alat Pengganti Hardware Sementara</p>
+        <h1>🍓 Raspi Mock Device</h1>
+        <p>Mengirim data MQTT seolah-olah ini Raspi</p>
         <p id="status" class="status">🔴 Disconnected</p>
-
-        <button id="btnStart" onclick="startTracking()">MULAI JALAN ▶</button>
-        <button id="btnStop" onclick="stopTracking()">BERHENTI ⏹</button>
-
-        <div class="info">
-            <p>Lat : <span id="valLat">-</span></p>
-            <p>Lon : <span id="valLon">-</span></p>
-            <p>Spd : <span id="valSpeed">0</span> km/h</p>
-            <p>Pass: <span id="valPass">0</span> orang</p>
-        </div>
-        <p style="font-size: 12px; color: #666; margin-top: 10px;">Log Pengiriman:</p>
-        <textarea id="logs" rows="6" style="width:100%; font-size: 11px;"></textarea>
+        <button id="btnStart" onclick="startTracking()">MULAI SIMULASI</button>
+        <button id="btnStop" onclick="stopTracking()">HENTIKAN</button>
+        <textarea id="logs" rows="8"></textarea>
     </div>
 
     <script>
-        // ================= KONFIGURASI =================
-        const MY_BUS_ID = 1;
+        // ================= KONFIGURASI WAJIB SAMA DENGAN RASPI =================
+        const BUS_ID = 1;
         
-        // GANTI IP INI DENGAN IP VPS KAMU! 
-        // JANGAN LUPA PAKAI 'ws://' dan port '8888'
+        // 1. IP VPS Anda. Wajib pakai port WebSocket (8888)
         const BROKER_URL = 'ws://145.79.15.182:8888'; 
         
-        const TOPIC = `diptrack/tracking/bus/${MY_BUS_ID}/location`;
-        // ===============================================
+        // 2. Topik ini harus SAMA PERSIS dengan topik yang dipakai Raspi nanti
+        const TOPIC = `diptrack/tracking/bus/${BUS_ID}/location`;
+        // =======================================================================
 
         let client;
         let watchId;
 
         function log(msg) {
-            const textarea = document.getElementById('logs');
-            const time = new Date().toLocaleTimeString();
-            textarea.value = `[${time}] ${msg}\n` + textarea.value;
+            const txt = document.getElementById('logs');
+            txt.value = `[${new Date().toLocaleTimeString()}] ${msg}\n` + txt.value;
         }
 
         function startTracking() {
-            log("Menghubungkan ke Broker...");
-            // Tombol berubah
+            log("Mengetuk pintu Broker WebSocket...");
             document.getElementById('btnStart').style.display = 'none';
             document.getElementById('btnStop').style.display = 'inline-block';
 
             client = mqtt.connect(BROKER_URL);
 
             client.on('connect', () => {
-                document.getElementById('status').innerText = "🟢 CONNECTED (Mencari GPS...)";
+                document.getElementById('status').innerText = "🟢 TERHUBUNG KE BROKER";
                 document.getElementById('status').style.color = "green";
-                log("✅ Terhubung ke Broker!");
+                log("✅ Berhasil masuk! Menunggu GPS...");
 
-                // Mulai GPS
                 if (navigator.geolocation) {
-                    watchId = navigator.geolocation.watchPosition(sendPosition, showError, {
-                        enableHighAccuracy: true,
-                        timeout: 5000,
-                        maximumAge: 0
+                    watchId = navigator.geolocation.watchPosition(sendPosition, (err) => log("❌ GPS Error: " + err.message), {
+                        enableHighAccuracy: true, timeout: 5000, maximumAge: 0
                     });
-                } else {
-                    alert("Browser HP ini tidak support GPS!");
                 }
             });
 
             client.on('error', (err) => {
-                log("❌ Error Koneksi: " + err.message);
-                document.getElementById('status').innerText = "❌ ERROR KONEKSI";
-            });
-
-            client.on('close', () => {
-                document.getElementById('status').innerText = "🔴 Disconnected";
-                document.getElementById('status').style.color = "red";
+                log("❌ Gagal Konek: Pastikan backend Aedes jalan & Port 8888 terbuka di VPS.");
             });
         }
 
         function stopTracking() {
             if(watchId) navigator.geolocation.clearWatch(watchId);
             if(client) client.end();
-            
             document.getElementById('btnStart').style.display = 'inline-block';
             document.getElementById('btnStop').style.display = 'none';
             document.getElementById('status').innerText = "🔴 Berhenti";
             document.getElementById('status').style.color = "red";
-            log("🛑 Tracking Stop.");
         }
 
         function sendPosition(position) {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            // Konversi m/s ke km/h. Jika null anggap 0.
-            const speed = position.coords.speed ? (position.coords.speed * 3.6).toFixed(1) : 0;
-            // Random penumpang 0-30
-            const pass = Math.floor(Math.random() * 30);
-
-            // Update UI
-            document.getElementById('status').innerText = "🟢 SENDING DATA...";
-            document.getElementById('valLat').innerText = lat.toFixed(6);
-            document.getElementById('valLon').innerText = lon.toFixed(6);
-            document.getElementById('valSpeed').innerText = speed;
-            document.getElementById('valPass').innerText = pass;
-
-            // Bungkus Data
+            // 3. BENTUK PAYLOAD JSON INI HARUS SAMA PERSIS DENGAN KODE PYTHON/C++ DI RASPI NANTI
             const payload = {
-                bus_id: MY_BUS_ID,
-                latitude: lat,
-                longitude: lon,
-                speed: parseFloat(speed),
-                passenger_count: pass
+                bus_id: BUS_ID,
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+                speed: position.coords.speed ? (position.coords.speed * 3.6).toFixed(1) : 0,
+                passenger_count: Math.floor(Math.random() * 30) // Penumpang dummy
             };
 
-            // Kirim
             client.publish(TOPIC, JSON.stringify(payload));
-            log(`📤 Sent: ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
-        }
-
-        function showError(error) {
-            log("❌ GPS Error: " + error.message);
+            log(`📤 Data terkirim: Lat ${payload.latitude.toFixed(4)}, Lon ${payload.longitude.toFixed(4)}`);
         }
     </script>
 </body>
